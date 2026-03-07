@@ -3,8 +3,8 @@ import { useState, useEffect, useRef } from "react";
 // ─── CONFIGURACIÓN SUPABASE ──────────────────────────────────────────────────
 // 1. Ve a supabase.com > tu proyecto > Settings > API
 // 2. Copia "Project URL" y "anon public key"
-const SUPABASE_URL = "https://TU_PROYECTO.supabase.co";       // ← cambia esto
-const SUPABASE_KEY = "TU_ANON_KEY";                            // ← cambia esto
+const SUPABASE_URL = "https://ntognnxsstmbyfptwhsb.supabase.co";       // ← cambia esto
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im50b2dubnhzc3RtYnlmcHR3aHNiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI5MTg3OTUsImV4cCI6MjA4ODQ5NDc5NX0.2MYhpK-MQTTwlpWWYkV0nTTbU-SVUeqCnjXXOU8GMHs";                            // ← cambia esto
 
 const headers = {
   "Content-Type": "application/json",
