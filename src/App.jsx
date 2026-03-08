@@ -7,6 +7,8 @@ const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
+const supabaseAdmin = createClient(SUPABASE_URL, "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im50b2dubnhzc3RtYnlmcHR3aHNiIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MjkxODc5NSwiZXhwIjoyMDg4NDk0Nzk1fQ.Wzak5eALZsKxG9nLrokcyb32MTdIygiPm1v3bERrhpo");
+
 const ESTADOS = {
   recibido:  { label: "Recibido",  color: "#F59E0B", bg: "rgba(245,158,11,0.15)",  next: "en_ruta",   icon: "📦" },
   en_ruta:   { label: "En ruta",   color: "#3B82F6", bg: "rgba(59,130,246,0.15)",  next: "entregado", icon: "🚴" },
@@ -346,25 +348,43 @@ function AdminApp({ user, perfil, onLogout }) {
     showToast("Paquete creado ✓"); setSaving(false);
   }
 
+  
   async function createMensajero() {
     if (!newMsgForm.nombre || !newMsgForm.email || !newMsgForm.password) return;
     setSaving(true);
     try {
-      const { data: msg } = await supabase.from("mensajeros").insert({ nombre: newMsgForm.nombre, telefono: newMsgForm.telefono, activo: true }).select().single();
-      const { data: authData, error: authErr } = await supabase.auth.signUp({
-        email: newMsgForm.email, password: newMsgForm.password,
-        options: { data: { rol: "mensajero", nombre: newMsgForm.nombre } }
+      const { data: authData, error: authErr } = await supabaseAdmin.auth.admin.createUser({
+        email: newMsgForm.email,
+        password: newMsgForm.password,
+        email_confirm: true,
+        user_metadata: { rol: "mensajero", nombre: newMsgForm.nombre }
       });
       if (authErr) throw authErr;
-      if (authData.user) {
-        await supabase.from("perfiles").upsert({ id: authData.user.id, rol: "mensajero", mensajero_id: msg.id, nombre: newMsgForm.nombre });
-      }
-      await loadAll(); setShowNewMsg(false);
+
+      const { data: msg } = await supabase.from("mensajeros").insert({ 
+        nombre: newMsgForm.nombre, 
+        telefono: newMsgForm.telefono, 
+        activo: true 
+      }).select().single();
+
+      await supabase.from("perfiles").upsert({ 
+        id: authData.user.id, 
+        rol: "mensajero", 
+        mensajero_id: msg.id, 
+        nombre: newMsgForm.nombre 
+      });
+
+      await loadAll();
+      setShowNewMsg(false);
       setNewMsgForm({ nombre: "", telefono: "", email: "", password: "" });
       showToast(`Mensajero ${newMsgForm.nombre} creado ✓`);
-    } catch (e) { showToast("Error: " + e.message, "err"); }
+    } catch (e) { 
+      showToast("Error: " + e.message, "err"); 
+    }
     setSaving(false);
   }
+
+
 
   const filtered = packages.filter(p =>
     (filterEstado === "todos" || p.estado === filterEstado) &&
