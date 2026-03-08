@@ -2,8 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import { createClient } from "@supabase/supabase-js";
 
 // ─── CONFIGURACIÓN SUPABASE ──────────────────────────────────────────────────
-const SUPABASE_URL = "https://ntognnxsstmbyfptwhsb.supabase.co";       // ← cambia esto
-const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im50b2dubnhzc3RtYnlmcHR3aHNiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI5MTg3OTUsImV4cCI6MjA4ODQ5NDc5NX0.2MYhpK-MQTTwlpWWYkV0nTTbU-SVUeqCnjXXOU8GMHs";                            // ← cambia esto
+const SUPABASE_URL = "https://TU_PROYECTO.supabase.co";       // ← cambia esto
+const SUPABASE_KEY = "TU_ANON_KEY";                            // ← cambia esto
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -97,7 +97,7 @@ function QRScanner({ onScan }) {
       text => { onScan(text.trim().toUpperCase()); stopScanner(); },
       () => {}
     ).then(() => setCamActive(true))
-     .catch(() => { setError("No se pudo acceder a la cámara. Acepta el permiso cuando el navegador lo pida."); instanceRef.current = null; });
+     .catch(() => { setError("No se pudo acceder a la cámara. Acepta el permiso."); instanceRef.current = null; });
   }
 
   function stopScanner() {
@@ -110,11 +110,83 @@ function QRScanner({ onScan }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
-      <div id="qr-reader" style={{ width: "100%", maxWidth: 300, borderRadius: 10, overflow: "hidden", background: "#0D1117", border: "1px solid #21262D", minHeight: camActive ? 0 : 0 }} />
+      <div id="qr-reader" style={{ width: "100%", maxWidth: 300, borderRadius: 10, overflow: "hidden", background: "#0D1117", border: "1px solid #21262D" }} />
       {error && <div style={{ color: "#EF4444", fontSize: 13, textAlign: "center" }}>{error}</div>}
       {!camActive
         ? <button style={S.btnPrimary} onClick={startScanner}>📷 Activar cámara para escanear</button>
         : <button style={S.btnSecondary} onClick={stopScanner}>⏹ Detener cámara</button>}
+    </div>
+  );
+}
+
+// ─── SUBIR FOTO EVIDENCIA ────────────────────────────────────────────────────
+function FotoEvidencia({ paqueteId, onFotoSubida }) {
+  const [preview, setPreview]   = useState(null);
+  const [file, setFile]         = useState(null);
+  const [subiendo, setSubiendo] = useState(false);
+  const [error, setError]       = useState("");
+  const inputRef                = useRef(null);
+
+  function seleccionarFoto(e) {
+    const f = e.target.files[0];
+    if (!f) return;
+    if (f.size > 5 * 1024 * 1024) { setError("La foto no puede superar 5MB"); return; }
+    setFile(f);
+    setError("");
+    const reader = new FileReader();
+    reader.onload = ev => setPreview(ev.target.result);
+    reader.readAsDataURL(f);
+  }
+
+  async function subirFoto() {
+    if (!file) return;
+    setSubiendo(true); setError("");
+    try {
+      const ext = file.name.split(".").pop();
+      const path = `${paqueteId}/${Date.now()}.${ext}`;
+      const { error: uploadError } = await supabase.storage
+        .from("evidencias")
+        .upload(path, file, { contentType: file.type, upsert: true });
+      if (uploadError) throw uploadError;
+      const { data: { publicUrl } } = supabase.storage.from("evidencias").getPublicUrl(path);
+      onFotoSubida(publicUrl);
+    } catch (e) {
+      setError("Error subiendo foto: " + e.message);
+    }
+    setSubiendo(false);
+  }
+
+  function limpiar() { setPreview(null); setFile(null); setError(""); }
+
+  return (
+    <div style={{ background: "#0D1117", border: "1px solid #30363D", borderRadius: 10, padding: 16, marginTop: 12 }}>
+      <div style={{ color: "#F59E0B", fontWeight: 700, fontSize: 14, marginBottom: 12 }}>📸 Foto de evidencia de entrega</div>
+      {!preview ? (
+        <div>
+          <input ref={inputRef} type="file" accept="image/*" capture="environment"
+            onChange={seleccionarFoto} style={{ display: "none" }} />
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button style={S.btnPrimary} onClick={() => { inputRef.current.removeAttribute("capture"); inputRef.current.click(); }}>
+              🖼️ Galería
+            </button>
+            <button style={{ ...S.btnPrimary, background: "#3B82F6" }} onClick={() => { inputRef.current.setAttribute("capture", "environment"); inputRef.current.click(); }}>
+              📷 Cámara
+            </button>
+          </div>
+          <div style={{ color: "#6B7280", fontSize: 11, marginTop: 8 }}>Opcional — puedes entregar sin foto</div>
+        </div>
+      ) : (
+        <div>
+          <img src={preview} alt="evidencia" style={{ width: "100%", maxHeight: 200, objectFit: "cover", borderRadius: 8, marginBottom: 10 }} />
+          {error && <div style={{ color: "#EF4444", fontSize: 12, marginBottom: 8 }}>{error}</div>}
+          <div style={{ display: "flex", gap: 8 }}>
+            <button style={S.btnSecondary} onClick={limpiar}>✕ Cambiar</button>
+            <button style={{ ...S.btnPrimary, flex: 1, justifyContent: "center" }} onClick={subirFoto} disabled={subiendo}>
+              {subiendo ? "Subiendo..." : "✅ Usar esta foto"}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -163,7 +235,7 @@ function MapaTracking({ ubicaciones, paquetes }) {
     <div style={{ borderRadius: 12, overflow: "hidden", border: "1px solid #21262D", marginBottom: 16 }}>
       <div style={{ background: "#161B22", padding: "10px 16px", display: "flex", justifyContent: "space-between" }}>
         <span style={{ fontWeight: 700, fontSize: 14 }}>🗺️ Mapa en tiempo real</span>
-        <span style={{ color: "#6B7280", fontSize: 12 }}>{ubicaciones.length} mensajero(s) activo(s) · actualiza c/10s</span>
+        <span style={{ color: "#6B7280", fontSize: 12 }}>{ubicaciones.length} mensajero(s) activo(s)</span>
       </div>
       <div ref={mapRef} style={{ height: 400, background: "#0D1117" }} />
     </div>
@@ -273,9 +345,7 @@ function AdminApp({ user, perfil, onLogout }) {
     if (!newMsgForm.nombre || !newMsgForm.email || !newMsgForm.password) return;
     setSaving(true);
     try {
-      // Insertar en auth via SQL directo (sin admin API)
       const { data: msg } = await supabase.from("mensajeros").insert({ nombre: newMsgForm.nombre, telefono: newMsgForm.telefono, activo: true }).select().single();
-      // Crear usuario via signup
       const { data: authData, error: authErr } = await supabase.auth.signUp({
         email: newMsgForm.email, password: newMsgForm.password,
         options: { data: { rol: "mensajero", nombre: newMsgForm.nombre } }
@@ -359,7 +429,7 @@ function AdminApp({ user, perfil, onLogout }) {
           )}
           <div style={S.tableWrap}>
             <table style={S.table}>
-              <thead><tr>{["ID","Cliente","Dirección","Mensajero","Prioridad","Estado","Acción"].map(h=><th key={h} style={S.th}>{h}</th>)}</tr></thead>
+              <thead><tr>{["ID","Cliente","Dirección","Mensajero","Prioridad","Estado","Evidencia","Acción"].map(h=><th key={h} style={S.th}>{h}</th>)}</tr></thead>
               <tbody>
                 {filtered.map(pkg=>{
                   const est=ESTADOS[pkg.estado];
@@ -371,6 +441,11 @@ function AdminApp({ user, perfil, onLogout }) {
                       <td style={S.td}>{pkg.mensajero}</td>
                       <td style={S.td}><span style={{...S.badge,background:pkg.prioridad==="urgente"?"rgba(239,68,68,0.15)":"rgba(156,163,175,0.15)",color:pkg.prioridad==="urgente"?"#EF4444":"#9CA3AF"}}>{pkg.prioridad==="urgente"?"🔴 Urgente":"Normal"}</span></td>
                       <td style={S.td}><span style={{...S.badge,background:est.bg,color:est.color}}>{est.icon} {est.label}</span></td>
+                      <td style={S.td}>
+                        {pkg.foto_entrega
+                          ? <a href={pkg.foto_entrega} target="_blank" rel="noreferrer" onClick={e=>e.stopPropagation()}><img src={pkg.foto_entrega} alt="evidencia" style={{width:40,height:40,objectFit:"cover",borderRadius:6,border:"1px solid #30363D"}}/></a>
+                          : <span style={{color:"#4B5563",fontSize:12}}>—</span>}
+                      </td>
                       <td style={S.td} onClick={e=>e.stopPropagation()}>
                         {est.next?<button style={S.btnAdvance} onClick={()=>advanceState(pkg)} disabled={saving}>→ {ESTADOS[est.next].label}</button>:<span style={{color:"#4B5563",fontSize:12}}>Completo</span>}
                       </td>
@@ -470,15 +545,24 @@ function AdminApp({ user, perfil, onLogout }) {
                   <div key={k} style={{background:"#0D1117",borderRadius:8,padding:12}}><div style={{color:"#6B7280",fontSize:12}}>{k}</div><div style={{color:"#F3F4F6",fontWeight:500}}>{v}</div></div>
                 ))}
               </div>
+              {pkg.foto_entrega && (
+                <div style={{marginTop:20}}>
+                  <div style={{color:"#6B7280",fontSize:12,marginBottom:8}}>📸 EVIDENCIA DE ENTREGA</div>
+                  <a href={pkg.foto_entrega} target="_blank" rel="noreferrer">
+                    <img src={pkg.foto_entrega} alt="evidencia" style={{width:"100%",maxHeight:300,objectFit:"cover",borderRadius:10,border:"1px solid #30363D"}}/>
+                  </a>
+                </div>
+              )}
               <div style={{marginTop:24}}>
                 <div style={{color:"#6B7280",fontSize:12,letterSpacing:1,marginBottom:12}}>HISTORIAL</div>
                 {(pkg.historial||[]).map((h,i)=>(
                   <div key={i} style={{display:"flex",alignItems:"flex-start",gap:12,paddingBottom:14}}>
                     <div style={{width:10,height:10,borderRadius:"50%",background:ESTADOS[h.estado].color,flexShrink:0,marginTop:4}}/>
-                    <div>
+                    <div style={{flex:1}}>
                       <span style={{color:ESTADOS[h.estado].color,fontWeight:600}}>{ESTADOS[h.estado].icon} {ESTADOS[h.estado].label}</span>
                       <span style={{color:"#6B7280",fontSize:12,marginLeft:8}}>{h.fecha} {h.hora}</span>
                       {h.lat&&<div style={{color:"#4B5563",fontSize:11,marginTop:2}}>📍 {h.lat?.toFixed(5)}, {h.lng?.toFixed(5)}</div>}
+                      {h.foto_url&&<a href={h.foto_url} target="_blank" rel="noreferrer"><img src={h.foto_url} alt="foto" style={{width:80,height:60,objectFit:"cover",borderRadius:6,marginTop:6,border:"1px solid #30363D"}}/></a>}
                     </div>
                   </div>
                 ))}
@@ -494,15 +578,17 @@ function AdminApp({ user, perfil, onLogout }) {
 
 // ─── MENSAJERO ────────────────────────────────────────────────────────────────
 function MensajeroApp({ user, perfil, onLogout }) {
-  const [packages, setPackages]         = useState([]);
+  const [packages, setPackages]           = useState([]);
   const [mensajeroInfo, setMensajeroInfo] = useState(null);
-  const [loading, setLoading]           = useState(true);
-  const [scanResult, setScanResult]     = useState(null);
-  const [manualCode, setManualCode]     = useState("");
-  const [saving, setSaving]             = useState(false);
-  const [toast, setToast]               = useState(null);
-  const [gps, setGps]                   = useState(null);
-  const gpsRef                          = useRef(null);
+  const [loading, setLoading]             = useState(true);
+  const [scanResult, setScanResult]       = useState(null);
+  const [manualCode, setManualCode]       = useState("");
+  const [saving, setSaving]               = useState(false);
+  const [toast, setToast]                 = useState(null);
+  const [gps, setGps]                     = useState(null);
+  const [fotoUrl, setFotoUrl]             = useState(null);
+  const [fotoLista, setFotoLista]         = useState(false);
+  const gpsRef                            = useRef(null);
 
   useEffect(() => { loadData(); startGPS(); return () => clearInterval(gpsRef.current); }, []);
 
@@ -533,6 +619,7 @@ function MensajeroApp({ user, perfil, onLogout }) {
 
   async function buscarPaquete(code) {
     if (!code) return;
+    setFotoUrl(null); setFotoLista(false);
     const { data } = await supabase.from("paquetes").select("*,mensajeros(nombre)").eq("qr", code);
     if (!data?.length) { setScanResult({ notFound: true, code }); return; }
     const pkg = data[0];
@@ -540,13 +627,25 @@ function MensajeroApp({ user, perfil, onLogout }) {
     setScanResult({ pkg: { ...pkg, mensajero: pkg.mensajeros?.nombre||"Sin asignar", historial: h||[] } });
   }
 
-  async function advanceState(pkg) {
+  async function advanceState(pkg, fotoUrlParam) {
     const next = ESTADOS[pkg.estado]?.next; if (!next) return;
     setSaving(true);
     const coords = await getGPS(); const { hora, fecha } = nowStr();
-    await supabase.from("paquetes").update({ estado: next }).eq("id", pkg.id);
-    await supabase.from("historial").insert({ paquete_id: pkg.id, estado: next, hora, fecha, lat: coords?.lat, lng: coords?.lng });
-    showToast(`→ ${ESTADOS[next].label} ${coords?"📍":""}`);
+    const fotoFinal = fotoUrlParam || fotoUrl || null;
+
+    await supabase.from("paquetes").update({
+      estado: next,
+      ...(next === "entregado" && fotoFinal ? { foto_entrega: fotoFinal } : {})
+    }).eq("id", pkg.id);
+
+    await supabase.from("historial").insert({
+      paquete_id: pkg.id, estado: next, hora, fecha,
+      lat: coords?.lat, lng: coords?.lng,
+      foto_url: fotoFinal
+    });
+
+    showToast(`→ ${ESTADOS[next].label} ${coords?"📍":""} ${fotoFinal?"📸":""}`);
+    setFotoUrl(null); setFotoLista(false);
     await buscarPaquete(pkg.qr); await loadData(); setSaving(false);
   }
 
@@ -587,6 +686,7 @@ function MensajeroApp({ user, perfil, onLogout }) {
 
         {scanResult&&!scanResult.notFound&&(()=>{
           const pkg=scanResult.pkg; const est=ESTADOS[pkg.estado];
+          const esEntrega = est.next === "entregado";
           return (
             <div style={{background:"#161B22",border:"1px solid #30363D",borderRadius:12,padding:20,marginBottom:16}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
@@ -601,14 +701,36 @@ function MensajeroApp({ user, perfil, onLogout }) {
                   <div style={{color:"#6B7280",fontSize:12,marginBottom:6}}>Historial</div>
                   {pkg.historial.map((h,i)=>(
                     <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"4px 0",borderBottom:"1px solid #21262D",fontSize:13}}>
-                      <span style={{color:ESTADOS[h.estado].color}}>{ESTADOS[h.estado].icon} {ESTADOS[h.estado].label} {h.lat?"📍":""}</span>
+                      <span style={{color:ESTADOS[h.estado].color}}>{ESTADOS[h.estado].icon} {ESTADOS[h.estado].label} {h.lat?"📍":""} {h.foto_url?"📸":""}</span>
                       <span style={{color:"#6B7280"}}>{h.fecha} {h.hora}</span>
                     </div>
                   ))}
                 </div>
               )}
-              {est.next&&<button style={{...S.btnPrimary,width:"100%",justifyContent:"center",padding:"12px",fontSize:15}} onClick={()=>advanceState(pkg)} disabled={saving}>{saving?"Guardando...":`Marcar como ${ESTADOS[est.next].label} ${ESTADOS[est.next].icon}`}</button>}
-              {!est.next&&<div style={{textAlign:"center",color:"#10B981",fontWeight:700,fontSize:16}}>✅ Paquete entregado</div>}
+
+              {/* Foto de evidencia — solo aparece cuando va a marcar como entregado */}
+              {est.next && (
+                <div>
+                  {esEntrega && (
+                    <FotoEvidencia
+                      paqueteId={pkg.id}
+                      onFotoSubida={url => { setFotoUrl(url); setFotoLista(true); showToast("Foto lista 📸"); }}
+                    />
+                  )}
+                  {fotoLista && fotoUrl && (
+                    <div style={{color:"#10B981",fontSize:13,marginTop:8,marginBottom:4}}>✅ Foto adjunta y lista</div>
+                  )}
+                  <button style={{...S.btnPrimary,width:"100%",justifyContent:"center",padding:"12px",fontSize:15,marginTop:12}} onClick={()=>advanceState(pkg)} disabled={saving}>
+                    {saving?"Guardando...":`Marcar como ${ESTADOS[est.next].label} ${ESTADOS[est.next].icon}`}
+                  </button>
+                </div>
+              )}
+              {!est.next&&(
+                <div>
+                  <div style={{textAlign:"center",color:"#10B981",fontWeight:700,fontSize:16,marginBottom:8}}>✅ Paquete entregado</div>
+                  {pkg.foto_entrega&&<a href={pkg.foto_entrega} target="_blank" rel="noreferrer"><img src={pkg.foto_entrega} alt="evidencia" style={{width:"100%",maxHeight:200,objectFit:"cover",borderRadius:8,border:"1px solid #30363D"}}/></a>}
+                </div>
+              )}
             </div>
           );
         })()}
@@ -624,7 +746,7 @@ function MensajeroApp({ user, perfil, onLogout }) {
           {pendientes.map(pkg=>{
             const est=ESTADOS[pkg.estado];
             return (
-              <div key={pkg.id} style={{background:"#0D1117",borderRadius:8,padding:12,marginBottom:8,cursor:"pointer",border:"1px solid #21262D"}} onClick={()=>setScanResult({pkg})}>
+              <div key={pkg.id} style={{background:"#0D1117",borderRadius:8,padding:12,marginBottom:8,cursor:"pointer",border:"1px solid #21262D"}} onClick={()=>{setScanResult({pkg});setFotoUrl(null);setFotoLista(false);}}>
                 <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
                   <span style={S.pkgId}>{pkg.id}</span>
                   <span style={{...S.badge,background:est.bg,color:est.color,fontSize:11}}>{est.icon} {est.label}</span>
