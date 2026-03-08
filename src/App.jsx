@@ -40,37 +40,58 @@ function Login({ onLogin }) {
   const [loading, setLoading]   = useState(false);
 
   async function handleLogin() {
-    setLoading(true); setError("");
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) { setError("Email o contraseña incorrectos"); setLoading(false); return; }
-    const { data: perfil } = await supabase.from("perfiles").select("*").eq("id", data.user.id).single().catch(() => ({ data: null }));
-    onLogin(data.user, perfil);
-    setLoading(false);
+    if (loading) return; // Evita clics dobles
+    setLoading(true); 
+    setError("");
+
+    try {
+      // 1. Intentar la autenticación
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ 
+        email, 
+        password 
+      });
+
+      if (authError) {
+        setError("Email o contraseña incorrectos");
+        setLoading(false);
+        return;
+      }
+
+      // 2. Intentar obtener el perfil (Cambiamos .single() por .maybeSingle())
+      // Esto evita que la app se bloquee si el perfil no existe
+      const { data: perfil, error: perfilError } = await supabase
+        .from("perfiles")
+        .select("*")
+        .eq("id", authData.user.id)
+        .maybeSingle();
+
+      if (perfilError) {
+        console.error("Error de base de datos:", perfilError);
+        setError("Error al conectar con la base de datos");
+        setLoading(false);
+        return;
+      }
+
+      if (!perfil) {
+        setError("Usuario sin perfil asignado en la tabla 'perfiles'");
+        setLoading(false);
+        return;
+      }
+
+      // 3. Si todo está OK, enviamos los datos al componente padre
+      onLogin(authData.user, perfil);
+
+    } catch (err) {
+      console.error("Fallo inesperado:", err);
+      setError("Ocurrió un error de red o de sistema");
+    } finally {
+      // Esta línea SIEMPRE se ejecuta, quitando el "Ingresando..."
+      setLoading(false);
+    }
   }
 
-  return (
-    <div style={{ minHeight: "100vh", background: "#0D1117", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Courier New', monospace", padding: 16 }}>
-      <div style={{ background: "#161B22", border: "1px solid #21262D", borderRadius: 16, padding: 40, width: "100%", maxWidth: 380 }}>
-        <div style={{ textAlign: "center", marginBottom: 32 }}>
-          <div style={{ fontSize: 48, marginBottom: 8 }}>⚡</div>
-          <div style={{ fontWeight: 700, fontSize: 24, color: "#F3F4F6", letterSpacing: 2 }}>PackTrack</div>
-          <div style={{ color: "#6B7280", fontSize: 13, marginTop: 4 }}>Sistema de monitoreo de entregas</div>
-        </div>
-        {error && <div style={{ background: "rgba(239,68,68,0.15)", border: "1px solid #EF4444", borderRadius: 8, padding: "10px 14px", color: "#EF4444", fontSize: 13, marginBottom: 16 }}>{error}</div>}
-        <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13, color: "#9CA3AF", marginBottom: 14 }}>
-          Email
-          <input style={S.input} type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="usuario@empresa.com" onKeyDown={e => e.key === "Enter" && handleLogin()} />
-        </label>
-        <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13, color: "#9CA3AF", marginBottom: 24 }}>
-          Contraseña
-          <input style={S.input} type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" onKeyDown={e => e.key === "Enter" && handleLogin()} />
-        </label>
-        <button style={{ ...S.btnPrimary, width: "100%", justifyContent: "center", padding: "12px", fontSize: 15 }} onClick={handleLogin} disabled={loading || !email || !password}>
-          {loading ? "Ingresando..." : "Ingresar"}
-        </button>
-      </div>
-    </div>
-  );
+
+
 }
 
 // ─── ESCÁNER QR ──────────────────────────────────────────────────────────────
