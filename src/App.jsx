@@ -42,7 +42,7 @@ function Login({ onLogin }) {
     setLoading(true); setError("");
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) { setError("Email o contraseña incorrectos"); setLoading(false); return; }
-    const { data: perfil } = await supabase.from("perfiles").select("*").eq("id", data.user.id).single();
+    const { data: perfil } = await supabase.from("perfiles").select("*").eq("id", data.user.id).single().catch(() => ({ data: null }));
     onLogin(data.user, perfil);
     setLoading(false);
   }
