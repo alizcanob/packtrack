@@ -249,7 +249,9 @@ export default function App() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const timeout = setTimeout(() => setLoading(false), 5000);
     supabase.auth.getSession().then(async ({ data: { session } }) => {
+      clearTimeout(timeout);
       if (session) {
         const { data: p } = await supabase.from("perfiles").select("*").eq("id", session.user.id).single();
         setUser(session.user); setPerfil(p);
@@ -264,6 +266,9 @@ export default function App() {
     });
     return () => subscription.unsubscribe();
   }, []);
+
+
+
 
   function handleLogout() { supabase.auth.signOut(); setUser(null); setPerfil(null); }
 
