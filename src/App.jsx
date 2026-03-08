@@ -345,19 +345,28 @@ function AdminApp({ user, perfil, onLogout }) {
     if (!newMsgForm.nombre || !newMsgForm.email || !newMsgForm.password) return;
     setSaving(true);
     try {
-      const { data: msg } = await supabase.from("mensajeros").insert({ nombre: newMsgForm.nombre, telefono: newMsgForm.telefono, activo: true }).select().single();
-      const { data: authData, error: authErr } = await supabase.auth.signUp({
-        email: newMsgForm.email, password: newMsgForm.password,
-        options: { data: { rol: "mensajero", nombre: newMsgForm.nombre } }
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/crear-mensajero`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${SUPABASE_KEY}`,
+        },
+        body: JSON.stringify({
+          email: newMsgForm.email,
+          password: newMsgForm.password,
+          nombre: newMsgForm.nombre,
+          telefono: newMsgForm.telefono,
+        })
       });
-      if (authErr) throw authErr;
-      if (authData.user) {
-        await supabase.from("perfiles").upsert({ id: authData.user.id, rol: "mensajero", mensajero_id: msg.id, nombre: newMsgForm.nombre });
-      }
-      await loadAll(); setShowNewMsg(false);
+      const result = await res.json();
+      if (!result.ok) throw new Error(result.error);
+      await loadAll();
+      setShowNewMsg(false);
       setNewMsgForm({ nombre: "", telefono: "", email: "", password: "" });
       showToast(`Mensajero ${newMsgForm.nombre} creado ✓`);
-    } catch (e) { showToast("Error: " + e.message, "err"); }
+    } catch (e) {
+      showToast("Error: " + e.message, "err");
+    }
     setSaving(false);
   }
 
