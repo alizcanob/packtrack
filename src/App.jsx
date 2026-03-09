@@ -11,6 +11,7 @@ const ESTADOS = {
   recibido:  { label: "Recibido",  color: "#F59E0B", bg: "rgba(245,158,11,0.15)",  next: "en_ruta",   icon: "📦" },
   en_ruta:   { label: "En ruta",   color: "#3B82F6", bg: "rgba(59,130,246,0.15)",  next: "entregado", icon: "🚴" },
   entregado: { label: "Entregado", color: "#10B981", bg: "rgba(16,185,129,0.15)",  next: null,        icon: "✅" },
+  cancelado: { label: "Cancelado",  color: "#EF4444", bg: "rgba(239,68,68,0.15)",   next: null,        icon: "❌" },
 };
 
 function nowStr() {
@@ -289,6 +290,12 @@ function AdminApp({ user, perfil, onLogout }) {
   const [saving, setSaving]                   = useState(false);
   const [newPkgForm, setNewPkgForm] = useState({ cliente: "", direccion: "", mensajero_id: "", peso: "", prioridad: "normal" });
   const [newMsgForm, setNewMsgForm] = useState({ nombre: "", telefono: "", email: "", password: "" });
+  const [cambioPassForm, setCambioPassForm] = useState({ mensajeroId: null, nombre: "", newPassword: "" });
+  const [showCambioPass, setShowCambioPass] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelPkg, setCancelPkg] = useState(null);
+  const [cancelMotivo, setCancelMotivo] = useState("cliente");
+  const [cancelOtra, setCancelOtra] = useState("");
 
   useEffect(() => { loadAll(); }, []);
   useEffect(() => {
@@ -347,53 +354,78 @@ function AdminApp({ user, perfil, onLogout }) {
     try {
       const res = await fetch(`${SUPABASE_URL}/functions/v1/crear-mensajero`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${SUPABASE_KEY}`,
-        },
-        body: JSON.stringify({
-          email: newMsgForm.email,
-          password: newMsgForm.password,
-          nombre: newMsgForm.nombre,
-          telefono: newMsgForm.telefono,
-        })
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${SUPABASE_KEY}` },
+        body: JSON.stringify({ email: newMsgForm.email, password: newMsgForm.password, nombre: newMsgForm.nombre, telefono: newMsgForm.telefono })
       });
       const result = await res.json();
       if (!result.ok) throw new Error(result.error);
-      await loadAll();
-      setShowNewMsg(false);
+      await loadAll(); setShowNewMsg(false);
       setNewMsgForm({ nombre: "", telefono: "", email: "", password: "" });
       showToast(`Mensajero ${newMsgForm.nombre} creado ✓`);
-    } catch (e) {
-      showToast("Error: " + e.message, "err");
-    }
+    } catch (e) { showToast("Error: " + e.message, "err"); }
     setSaving(false);
+  }
+
+  async function cambiarPassword() {
+    if (!cambioPassForm.newPassword || cambioPassForm.newPassword.length < 6) {
+      showToast("La contraseña debe tener al menos 6 caracteres", "err"); return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/cambiar-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${SUPABASE_KEY}` },
+        body: JSON.stringify({ mensajero_id: cambioPassForm.mensajeroId, new_password: cambioPassForm.newPassword })
+      });
+      const result = await res.json();
+      if (!result.ok) throw new Error(result.error);
+      showToast(`Contraseña de ${cambioPassForm.nombre} actualizada ✓`);
+      setShowCambioPass(false); setCambioPassForm({ mensajeroId: null, nombre: "", newPassword: "" });
+    } catch (e) { showToast("Error: " + e.message, "err"); }
+    setSaving(false);
+  }
+
+  async function cancelarPaquete() {
+    if (!cancelPkg) return;
+    setSaving(true);
+    const motivo = cancelMotivo === "otra" ? cancelOtra : cancelMotivo === "cliente" ? "Cancelado por el cliente" : "Cancelado por administrador";
+    const { hora, fecha } = nowStr();
+    await supabase.from("paquetes").update({ estado: "cancelado" }).eq("id", cancelPkg.id);
+    await supabase.from("historial").insert({ paquete_id: cancelPkg.id, estado: "cancelado", hora, fecha, lat: null, lng: null });
+    showToast(`Paquete cancelado: ${motivo}`);
+    setShowCancelModal(false); setCancelPkg(null); setCancelMotivo("cliente"); setCancelOtra("");
+    await loadAll(); setSaving(false);
   }
 
   const filtered = packages.filter(p =>
     (filterEstado === "todos" || p.estado === filterEstado) &&
     (filterMensajero === "todos" || p.mensajero === filterMensajero)
   );
-  const stats = { total: packages.length, recibido: packages.filter(p=>p.estado==="recibido").length, en_ruta: packages.filter(p=>p.estado==="en_ruta").length, entregado: packages.filter(p=>p.estado==="entregado").length };
+  const stats = { total: packages.length, recibido: packages.filter(p=>p.estado==="recibido").length, en_ruta: packages.filter(p=>p.estado==="en_ruta").length, entregado: packages.filter(p=>p.estado==="entregado").length, cancelado: packages.filter(p=>p.estado==="cancelado").length };
 
   return (
     <div style={S.root}>
       {toast && <div style={{ ...S.toast, background: toast.type==="ok"?"#10B981":"#EF4444" }}>{toast.msg}</div>}
-      <nav style={S.nav}>
+      <nav style={{...S.nav, flexWrap:"wrap", gap:8}}>
         <div style={S.navBrand}><span>⚡</span><span style={S.navTitle}>PackTrack</span><span style={{ ...S.badge, background:"rgba(167,139,250,0.15)", color:"#A78BFA", fontSize:11 }}>Admin</span></div>
-        <div style={S.navTabs}>
-          {[["dashboard","📊 Dashboard"],["mapa","🗺️ Mapa"],["mensajeros","👤 Mensajeros"]].map(([v,l]) => (
-            <button key={v} onClick={()=>setView(v)} style={{...S.navTab,...(view===v?S.navTabActive:{})}}>{l}</button>
+        <div style={{display:"flex", gap:4, flexWrap:"wrap", flex:1, justifyContent:"center"}}>
+          {[["dashboard","📊"],["mapa","🗺️"],["mensajeros","👤"]].map(([v,l]) => (
+            <button key={v} onClick={()=>setView(v)} style={{...S.navTab,...(view===v?S.navTabActive:{}), padding:"8px 10px"}} title={v}>{l} <span style={{display:"none"}}>{v}</span></button>
           ))}
         </div>
-        <button style={S.btnSecondary} onClick={onLogout}>Salir</button>
+        <button style={{...S.btnSecondary, fontSize:13}} onClick={onLogout}>Salir 🚪</button>
       </nav>
+      <div style={{background:"#161B22", borderBottom:"1px solid #21262D", padding:"4px 16px", display:"flex", gap:4, overflowX:"auto"}}>
+        {[["dashboard","📊 Dashboard"],["mapa","🗺️ Mapa"],["mensajeros","👤 Mensajeros"]].map(([v,l]) => (
+          <button key={v} onClick={()=>setView(v)} style={{...S.navTab,...(view===v?S.navTabActive:{}), whiteSpace:"nowrap", fontSize:13}}>{l}</button>
+        ))}
+      </div>
       {loading && <div style={S.loadingBar}/>}
 
       {view==="dashboard" && (
         <div style={S.page}>
           <div style={S.statsRow}>
-            {[["Total",stats.total,"#A78BFA"],["Recibidos",stats.recibido,"#F59E0B"],["En ruta",stats.en_ruta,"#3B82F6"],["Entregados",stats.entregado,"#10B981"]].map(([label,val,color])=>(
+            {[["Total",stats.total,"#A78BFA"],["Recibidos",stats.recibido,"#F59E0B"],["En ruta",stats.en_ruta,"#3B82F6"],["Entregados",stats.entregado,"#10B981"],["Cancelados",stats.cancelado,"#EF4444"]].map(([label,val,color])=>(
               <div key={label} style={{...S.statCard, borderTop:`3px solid ${color}`}}>
                 <div style={{...S.statNum,color}}>{val}</div><div style={S.statLabel}>{label}</div>
               </div>
@@ -403,7 +435,7 @@ function AdminApp({ user, perfil, onLogout }) {
             <div style={S.filters}>
               <select style={S.select} value={filterEstado} onChange={e=>setFilterEstado(e.target.value)}>
                 <option value="todos">Todos los estados</option>
-                <option value="recibido">Recibido</option><option value="en_ruta">En ruta</option><option value="entregado">Entregado</option>
+                <option value="recibido">Recibido</option><option value="en_ruta">En ruta</option><option value="entregado">Entregado</option><option value="cancelado">Cancelado</option>
               </select>
               <select style={S.select} value={filterMensajero} onChange={e=>setFilterMensajero(e.target.value)}>
                 <option value="todos">Todos los mensajeros</option>
@@ -530,7 +562,10 @@ function AdminApp({ user, perfil, onLogout }) {
                       </div>
                     ))}
                   </div>
-                  <button style={{...S.btnSecondary,width:"100%",fontSize:12}} onClick={()=>{if(window.confirm(`¿Desactivar a ${m.nombre}?`))supabase.from("mensajeros").update({activo:false}).eq("id",m.id).then(loadAll);}}>Desactivar</button>
+                  <div style={{display:"flex", gap:8}}>
+                    <button style={{...S.btnSecondary,flex:1,fontSize:12}} onClick={()=>{setCambioPassForm({mensajeroId:m.id,nombre:m.nombre,newPassword:""});setShowCambioPass(true);}}>🔑 Cambiar clave</button>
+                    <button style={{...S.btnSecondary,flex:1,fontSize:12,color:"#EF4444",borderColor:"#EF4444"}} onClick={()=>{if(window.confirm(`¿Desactivar a ${m.nombre}?`))supabase.from("mensajeros").update({activo:false}).eq("id",m.id).then(loadAll);}}>Desactivar</button>
+                  </div>
                 </div>
               );
             })}
@@ -576,7 +611,13 @@ function AdminApp({ user, perfil, onLogout }) {
                   </div>
                 ))}
               </div>
-              {est.next&&<button style={{...S.btnPrimary,marginTop:20,width:"100%",justifyContent:"center",padding:"12px"}} onClick={()=>advanceState(pkg)} disabled={saving}>Avanzar a → {ESTADOS[est.next].icon} {ESTADOS[est.next].label}</button>}
+              {est.next && (
+                <div style={{display:"flex", gap:10, marginTop:20}}>
+                  <button style={{...S.btnPrimary,flex:1,justifyContent:"center",padding:"12px"}} onClick={()=>advanceState(pkg)} disabled={saving}>Avanzar a → {ESTADOS[est.next].icon} {ESTADOS[est.next].label}</button>
+                  <button style={{...S.btnSecondary,padding:"12px 16px",color:"#EF4444",borderColor:"#EF4444"}} onClick={()=>{setCancelPkg(pkg);setShowCancelModal(true);}}>❌ Cancelar</button>
+                </div>
+              )}
+              {pkg.estado==="cancelado" && <div style={{marginTop:16,padding:12,background:"rgba(239,68,68,0.1)",borderRadius:8,color:"#EF4444",textAlign:"center",fontWeight:600}}>❌ Envío cancelado</div>}
             </div>
           </div>
         );
@@ -597,6 +638,9 @@ function MensajeroApp({ user, perfil, onLogout }) {
   const [gps, setGps]                     = useState(null);
   const [fotoUrl, setFotoUrl]             = useState(null);
   const [fotoLista, setFotoLista]         = useState(false);
+  const [showCancelMsg, setShowCancelMsg] = useState(false);
+  const [cancelMotivoMsg, setCancelMotivoMsg] = useState("cliente");
+  const [cancelOtraMsg, setCancelOtraMsg] = useState("");
   const gpsRef                            = useRef(null);
 
   useEffect(() => { loadData(); startGPS(); return () => clearInterval(gpsRef.current); }, []);
@@ -658,7 +702,18 @@ function MensajeroApp({ user, perfil, onLogout }) {
     await buscarPaquete(pkg.qr); await loadData(); setSaving(false);
   }
 
-  const pendientes = packages.filter(p => p.estado !== "entregado");
+  async function cancelarEnvio(pkg) {
+    setSaving(true);
+    const motivo = cancelMotivoMsg === "otra" ? cancelOtraMsg : cancelMotivoMsg === "cliente" ? "Cancelado por el cliente" : "Cancelado por administrador";
+    const { hora, fecha } = nowStr();
+    await supabase.from("paquetes").update({ estado: "cancelado" }).eq("id", pkg.id);
+    await supabase.from("historial").insert({ paquete_id: pkg.id, estado: "cancelado", hora, fecha });
+    showToast(`Cancelado: ${motivo}`);
+    setShowCancelMsg(false); setScanResult(null); setCancelMotivoMsg("cliente"); setCancelOtraMsg("");
+    await loadData(); setSaving(false);
+  }
+
+  const pendientes = packages.filter(p => p.estado !== "entregado" && p.estado !== "cancelado");
 
   return (
     <div style={S.root}>
@@ -732,6 +787,23 @@ function MensajeroApp({ user, perfil, onLogout }) {
                   <button style={{...S.btnPrimary,width:"100%",justifyContent:"center",padding:"12px",fontSize:15,marginTop:12}} onClick={()=>advanceState(pkg)} disabled={saving}>
                     {saving?"Guardando...":`Marcar como ${ESTADOS[est.next].label} ${ESTADOS[est.next].icon}`}
                   </button>
+                  <button style={{...S.btnSecondary,width:"100%",justifyContent:"center",padding:"10px",fontSize:13,marginTop:8,color:"#EF4444",borderColor:"#EF4444"}} onClick={()=>setShowCancelMsg(true)}>❌ Cancelar envío</button>
+                  {showCancelMsg && (
+                    <div style={{background:"#0D1117",border:"1px solid #EF4444",borderRadius:10,padding:16,marginTop:12}}>
+                      <div style={{fontWeight:700,marginBottom:12,color:"#EF4444"}}>Motivo de cancelación</div>
+                      {[["cliente","Cancelado por el cliente"],["admin","Cancelado por administrador"],["otra","Otra causa..."]].map(([val,lbl])=>(
+                        <label key={val} style={{display:"flex",alignItems:"center",gap:10,padding:"8px",borderRadius:6,background:cancelMotivoMsg===val?"#21262D":"transparent",cursor:"pointer",marginBottom:4}}>
+                          <input type="radio" name="motivoMsg" value={val} checked={cancelMotivoMsg===val} onChange={()=>setCancelMotivoMsg(val)} style={{accentColor:"#EF4444"}}/>
+                          <span style={{color:"#F3F4F6",fontSize:13}}>{lbl}</span>
+                        </label>
+                      ))}
+                      {cancelMotivoMsg==="otra" && <input style={{...S.scanInput,width:"100%",marginTop:8,boxSizing:"border-box"}} placeholder="Describe el motivo..." value={cancelOtraMsg} onChange={e=>setCancelOtraMsg(e.target.value)}/>}
+                      <div style={{display:"flex",gap:8,marginTop:12}}>
+                        <button style={{...S.btnSecondary,flex:1,justifyContent:"center",fontSize:13}} onClick={()=>setShowCancelMsg(false)}>Volver</button>
+                        <button style={{flex:1,justifyContent:"center",padding:"8px",borderRadius:8,border:"none",background:"#EF4444",color:"white",fontWeight:700,cursor:"pointer",fontSize:13}} onClick={()=>cancelarEnvio(pkg)} disabled={saving||(cancelMotivoMsg==="otra"&&!cancelOtraMsg)}>{saving?"...":"Confirmar"}</button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
               {!est.next&&(
