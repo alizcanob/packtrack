@@ -250,20 +250,38 @@ export default function App() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Timeout de seguridad: si en 5 segundos no carga, mostrar login
+    const timeout = setTimeout(() => setLoading(false), 5000);
+
     supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (session) {
-        const { data: p } = await supabase.from("perfiles").select("*").eq("id", session.user.id).single();
-        setUser(session.user); setPerfil(p);
+      clearTimeout(timeout);
+      if (session?.user) {
+        try {
+          const { data: p, error } = await supabase.from("perfiles").select("*").eq("id", session.user.id).single();
+          if (!error && p) { setUser(session.user); setPerfil(p); }
+          else {
+            // Perfil no encontrado — limpiar sesión
+            await supabase.auth.signOut();
+          }
+        } catch { await supabase.auth.signOut(); }
       }
       setLoading(false);
+    }).catch(async () => {
+      clearTimeout(timeout);
+      await supabase.auth.signOut();
+      setLoading(false);
     });
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_, session) => {
-      if (session) {
-        const { data: p } = await supabase.from("perfiles").select("*").eq("id", session.user.id).single();
-        setUser(session.user); setPerfil(p);
+      if (session?.user) {
+        try {
+          const { data: p, error } = await supabase.from("perfiles").select("*").eq("id", session.user.id).single();
+          if (!error && p) { setUser(session.user); setPerfil(p); }
+          else { setUser(null); setPerfil(null); }
+        } catch { setUser(null); setPerfil(null); }
       } else { setUser(null); setPerfil(null); }
     });
-    return () => subscription.unsubscribe();
+    return () => { clearTimeout(timeout); subscription.unsubscribe(); };
   }, []);
 
   function handleLogout() { supabase.auth.signOut(); setUser(null); setPerfil(null); }
@@ -580,7 +598,7 @@ function AdminApp({ user, perfil, onLogout }) {
                     ))}
                   </div>
                   <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                    <button style={{...S.btnPrimary,width:"100%",justifyContent:"center",padding:"12px",fontSize:14}} onClick={()=>{setCambioPassForm({mensajeroId:m.id,nombre:m.nombre,newPassword:""});setShowCambioPass(true);}}>🔑 Cambiar contraseña</button>
+                    <div style={{...S.btnPrimary,width:"100%",justifyContent:"center",padding:"12px",fontSize:14,cursor:"pointer",userSelect:"none",boxSizing:"border-box"}} onClick={()=>{setCambioPassForm({mensajeroId:m.id,nombre:m.nombre,newPassword:""});setShowCambioPass(true);}}>🔑 Cambiar contraseña</div>
                     <button style={{...S.btnSecondary,width:"100%",justifyContent:"center",padding:"10px",fontSize:14,color:"#EF4444",borderColor:"rgba(239,68,68,0.4)"}} onClick={()=>{if(window.confirm(`¿Desactivar a ${m.nombre}?`))supabase.from("mensajeros").update({activo:false}).eq("id",m.id).then(loadAll);}}>⛔ Desactivar mensajero</button>
                   </div>
                 </div>
