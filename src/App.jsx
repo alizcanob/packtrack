@@ -742,6 +742,7 @@ function MensajeroApp({ user, perfil, onLogout }) {
   const [showCancelMsg, setShowCancelMsg] = useState(false);
   const [cancelMotivoMsg, setCancelMotivoMsg] = useState("cliente");
   const [cancelOtraMsg, setCancelOtraMsg] = useState("");
+  const [newPkgFromScan, setNewPkgFromScan] = useState(null);
   const gpsRef                            = useRef(null);
 
   useEffect(() => { loadData(); startGPS(); return () => clearInterval(gpsRef.current); }, []);
@@ -801,6 +802,31 @@ function MensajeroApp({ user, perfil, onLogout }) {
     showToast(`→ ${ESTADOS[next].label} ${coords?"📍":""} ${fotoFinal?"📸":""}`);
     setFotoUrl(null); setFotoLista(false);
     await buscarPaquete(pkg.qr); await loadData(); setSaving(false);
+  }
+
+  async function crearPaqueteDesdeEscaneo() {
+    if (!newPkgFromScan) return;
+    setSaving(true);
+    const { hora, fecha } = nowStr();
+    const id = newPkgFromScan.qr;
+    try {
+      await supabase.from("paquetes").insert({
+        id,
+        qr: id,
+        cliente: newPkgFromScan.cliente,
+        direccion: newPkgFromScan.direccion,
+        mensajero_id: perfil.mensajero_id,
+        peso: newPkgFromScan.peso || null,
+        prioridad: "normal",
+        estado: "recibido"
+      });
+      await supabase.from("historial").insert({ paquete_id: id, estado: "recibido", hora, fecha });
+      showToast("Paquete creado ✓");
+      setNewPkgFromScan(null);
+      setScanResult(null);
+      await loadData();
+    } catch(e) { showToast("Error: " + e.message, "err"); }
+    setSaving(false);
   }
 
   async function cancelarEnvio(pkg) {
@@ -917,9 +943,39 @@ function MensajeroApp({ user, perfil, onLogout }) {
           );
         })()}
         {scanResult?.notFound&&(
-          <div style={{background:"#161B22",border:"1px solid #EF4444",borderRadius:12,padding:20,marginBottom:16}}>
-            <div style={{color:"#EF4444",fontWeight:700}}>❌ Paquete no encontrado</div>
-            <div style={{color:"#9CA3AF",fontSize:13}}>Código: {scanResult.code}</div>
+          <div style={{background:"#161B22",border:"1px solid #F59E0B",borderRadius:12,padding:20,marginBottom:16}}>
+            <div style={{color:"#F59E0B",fontWeight:700,fontSize:16,marginBottom:4}}>📦 Paquete no registrado</div>
+            <div style={{color:"#9CA3AF",fontSize:13,marginBottom:16}}>Código escaneado: <b style={{color:"#F3F4F6"}}>{scanResult.code}</b></div>
+            {!newPkgFromScan ? (
+              <button style={{...S.btnPrimary,width:"100%",justifyContent:"center",padding:"12px",fontSize:15}}
+                onClick={()=>setNewPkgFromScan({qr:scanResult.code,cliente:"",direccion:"",peso:""})}>
+                + Registrar paquete con este código
+              </button>
+            ) : (
+              <div>
+                <div style={{fontWeight:700,fontSize:15,marginBottom:12,color:"#F3F4F6"}}>Datos del paquete</div>
+                <div style={{marginBottom:10}}>
+                  <div style={{color:"#6B7280",fontSize:12,marginBottom:4}}>ID / Código QR</div>
+                  <input style={{...S.scanInput,width:"100%",boxSizing:"border-box",background:"#0D1117",color:"#6B7280"}} value={newPkgFromScan.qr} readOnly/>
+                </div>
+                <div style={{marginBottom:10}}>
+                  <div style={{color:"#6B7280",fontSize:12,marginBottom:4}}>Nombre del cliente *</div>
+                  <input style={{...S.scanInput,width:"100%",boxSizing:"border-box"}} placeholder="Ej: Juan García" value={newPkgFromScan.cliente} onChange={e=>setNewPkgFromScan(p=>({...p,cliente:e.target.value}))}/>
+                </div>
+                <div style={{marginBottom:10}}>
+                  <div style={{color:"#6B7280",fontSize:12,marginBottom:4}}>Dirección de entrega *</div>
+                  <input style={{...S.scanInput,width:"100%",boxSizing:"border-box"}} placeholder="Ej: Calle 123 # 45-67" value={newPkgFromScan.direccion} onChange={e=>setNewPkgFromScan(p=>({...p,direccion:e.target.value}))}/>
+                </div>
+                <div style={{marginBottom:16}}>
+                  <div style={{color:"#6B7280",fontSize:12,marginBottom:4}}>Peso (opcional)</div>
+                  <input style={{...S.scanInput,width:"100%",boxSizing:"border-box"}} placeholder="Ej: 2kg" value={newPkgFromScan.peso} onChange={e=>setNewPkgFromScan(p=>({...p,peso:e.target.value}))}/>
+                </div>
+                <div style={{display:"flex",gap:8}}>
+                  <button style={{...S.btnSecondary,flex:1,justifyContent:"center",padding:"12px"}} onClick={()=>setNewPkgFromScan(null)}>Cancelar</button>
+                  <button style={{...S.btnPrimary,flex:1,justifyContent:"center",padding:"12px"}} onClick={crearPaqueteDesdeEscaneo} disabled={saving||!newPkgFromScan.cliente||!newPkgFromScan.direccion}>{saving?"Guardando...":"Registrar paquete"}</button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
