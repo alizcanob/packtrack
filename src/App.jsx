@@ -292,6 +292,8 @@ function AdminApp({ user, perfil, onLogout }) {
   const [newMsgForm, setNewMsgForm] = useState({ nombre: "", telefono: "", email: "", password: "" });
   const [cambioPassForm, setCambioPassForm] = useState({ mensajeroId: null, nombre: "", newPassword: "" });
   const [showCambioPass, setShowCambioPass] = useState(false);
+  const [showCambioPassAdmin, setShowCambioPassAdmin] = useState(false);
+  const [newPassAdmin, setNewPassAdmin] = useState("");
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelPkg, setCancelPkg] = useState(null);
   const [cancelMotivo, setCancelMotivo] = useState("cliente");
@@ -366,6 +368,18 @@ function AdminApp({ user, perfil, onLogout }) {
     setSaving(false);
   }
 
+  async function cambiarPasswordAdmin() {
+    if (!newPassAdmin || newPassAdmin.length < 6) { showToast("Mínimo 6 caracteres", "err"); return; }
+    setSaving(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassAdmin });
+      if (error) throw new Error(error.message);
+      showToast("Tu contraseña fue actualizada ✓");
+      setShowCambioPassAdmin(false); setNewPassAdmin("");
+    } catch (e) { showToast("Error: " + e.message, "err"); }
+    setSaving(false);
+  }
+
   async function cambiarPassword() {
     if (!cambioPassForm.newPassword || cambioPassForm.newPassword.length < 6) {
       showToast("La contraseña debe tener al menos 6 caracteres", "err"); return;
@@ -413,7 +427,10 @@ function AdminApp({ user, perfil, onLogout }) {
             <button key={v} onClick={()=>setView(v)} style={{...S.navTab,...(view===v?S.navTabActive:{}), padding:"8px 10px"}} title={v}>{l} <span style={{display:"none"}}>{v}</span></button>
           ))}
         </div>
-        <button style={{...S.btnSecondary, fontSize:13}} onClick={onLogout}>Salir 🚪</button>
+        <div style={{display:"flex",gap:6}}>
+          <button style={{...S.btnSecondary,fontSize:13}} onClick={()=>setShowCambioPassAdmin(true)}>🔑</button>
+          <button style={{...S.btnSecondary, fontSize:13}} onClick={onLogout}>Salir 🚪</button>
+        </div>
       </nav>
       <div style={{background:"#161B22", borderBottom:"1px solid #21262D", padding:"4px 16px", display:"flex", gap:4, overflowX:"auto"}}>
         {[["dashboard","📊 Dashboard"],["mapa","🗺️ Mapa"],["mensajeros","👤 Mensajeros"]].map(([v,l]) => (
@@ -562,9 +579,9 @@ function AdminApp({ user, perfil, onLogout }) {
                       </div>
                     ))}
                   </div>
-                  <div style={{display:"flex", gap:8}}>
-                    <button style={{...S.btnSecondary,flex:1,fontSize:12}} onClick={()=>{setCambioPassForm({mensajeroId:m.id,nombre:m.nombre,newPassword:""});setShowCambioPass(true);}}>🔑 Cambiar clave</button>
-                    <button style={{...S.btnSecondary,flex:1,fontSize:12,color:"#EF4444",borderColor:"#EF4444"}} onClick={()=>{if(window.confirm(`¿Desactivar a ${m.nombre}?`))supabase.from("mensajeros").update({activo:false}).eq("id",m.id).then(loadAll);}}>Desactivar</button>
+                  <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                    <button style={{...S.btnPrimary,width:"100%",justifyContent:"center",padding:"12px",fontSize:14}} onClick={()=>{setCambioPassForm({mensajeroId:m.id,nombre:m.nombre,newPassword:""});setShowCambioPass(true);}}>🔑 Cambiar contraseña</button>
+                    <button style={{...S.btnSecondary,width:"100%",justifyContent:"center",padding:"10px",fontSize:14,color:"#EF4444",borderColor:"rgba(239,68,68,0.4)"}} onClick={()=>{if(window.confirm(`¿Desactivar a ${m.nombre}?`))supabase.from("mensajeros").update({activo:false}).eq("id",m.id).then(loadAll);}}>⛔ Desactivar mensajero</button>
                   </div>
                 </div>
               );
