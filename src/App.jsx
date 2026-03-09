@@ -390,8 +390,13 @@ function AdminApp({ user, perfil, onLogout }) {
     if (!newPassAdmin || newPassAdmin.length < 6) { showToast("Mínimo 6 caracteres", "err"); return; }
     setSaving(true);
     try {
-      const { error } = await supabase.auth.updateUser({ password: newPassAdmin });
-      if (error) throw new Error(error.message);
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/cambiar-password-admin`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${SUPABASE_KEY}` },
+        body: JSON.stringify({ user_id: user.id, new_password: newPassAdmin })
+      });
+      const result = await res.json();
+      if (!result.ok) throw new Error(result.error);
       showToast("Tu contraseña fue actualizada ✓");
       setShowCambioPassAdmin(false); setNewPassAdmin("");
     } catch (e) { showToast("Error: " + e.message, "err"); }
@@ -587,7 +592,11 @@ function AdminApp({ user, perfil, onLogout }) {
               return (
                 <div key={m.id} style={{background:"#161B22",border:"1px solid #21262D",borderRadius:12,padding:20}}>
                   <div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}>
-                    <div><div style={{fontWeight:700,fontSize:16}}>🚴 {m.nombre}</div>{m.telefono&&<div style={{color:"#6B7280",fontSize:13}}>📱 {m.telefono}</div>}</div>
+                    <div>
+                      <div style={{fontWeight:700,fontSize:16}}>🚴 {m.nombre}</div>
+                      {m.telefono&&<div style={{color:"#6B7280",fontSize:13}}>📱 {m.telefono}</div>}
+                      {m.email&&<div style={{color:"#6B7280",fontSize:13}}>✉️ {m.email}</div>}
+                    </div>
                     <span style={{...S.badge,background:ub?"rgba(16,185,129,0.15)":"rgba(107,114,128,0.15)",color:ub?"#10B981":"#6B7280",fontSize:11}}>{ub?"● En línea":"○ Offline"}</span>
                   </div>
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:12}}>
