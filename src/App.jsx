@@ -657,6 +657,63 @@ function AdminApp({ user, perfil, onLogout }) {
           </div>
         );
       })()}
+
+      {/* ── MODAL: Cambiar clave Admin ─────────────────────────────── */}
+      {showCambioPassAdmin && (
+        <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.75)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2000,padding:16}}>
+          <div style={{background:"#161B22",borderRadius:16,padding:24,width:"100%",maxWidth:380,border:"1px solid #30363D"}}>
+            <div style={{fontWeight:700,fontSize:18,marginBottom:4}}>🔑 Cambiar mi contraseña</div>
+            <div style={{color:"#9CA3AF",fontSize:13,marginBottom:20}}>{user.email}</div>
+            <input style={{...S.input,fontSize:15,padding:"12px 14px"}} type="password" placeholder="Nueva contraseña (mín. 6 caracteres)" value={newPassAdmin} onChange={e=>setNewPassAdmin(e.target.value)} onKeyDown={e=>e.key==="Enter"&&cambiarPasswordAdmin()}/>
+            <div style={{display:"flex",gap:10,marginTop:16}}>
+              <button style={{...S.btnSecondary,flex:1,justifyContent:"center",padding:"12px"}} onClick={()=>{setShowCambioPassAdmin(false);setNewPassAdmin("");}}>Cancelar</button>
+              <button style={{...S.btnPrimary,flex:1,justifyContent:"center",padding:"12px"}} onClick={cambiarPasswordAdmin} disabled={saving||newPassAdmin.length<6}>{saving?"Guardando...":"Guardar"}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL: Cambiar clave Mensajero ──────────────────────────── */}
+      {showCambioPass && (
+        <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.75)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2000,padding:16}}>
+          <div style={{background:"#161B22",borderRadius:16,padding:24,width:"100%",maxWidth:380,border:"1px solid #30363D"}}>
+            <div style={{fontWeight:700,fontSize:18,marginBottom:4}}>🔑 Cambiar contraseña</div>
+            <div style={{color:"#9CA3AF",fontSize:13,marginBottom:20}}>Mensajero: <b style={{color:"#F3F4F6"}}>{cambioPassForm.nombre}</b></div>
+            <input style={{...S.input,fontSize:15,padding:"12px 14px"}} type="password" placeholder="Nueva contraseña (mín. 6 caracteres)" value={cambioPassForm.newPassword} onChange={e=>setCambioPassForm(f=>({...f,newPassword:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&cambiarPassword()}/>
+            <div style={{display:"flex",gap:10,marginTop:16}}>
+              <button style={{...S.btnSecondary,flex:1,justifyContent:"center",padding:"12px"}} onClick={()=>{setShowCambioPass(false);setCambioPassForm({mensajeroId:null,nombre:"",newPassword:""});}}>Cancelar</button>
+              <button style={{...S.btnPrimary,flex:1,justifyContent:"center",padding:"12px"}} onClick={cambiarPassword} disabled={saving||cambioPassForm.newPassword.length<6}>{saving?"Guardando...":"Guardar"}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL: Cancelar / Eliminar paquete ──────────────────────── */}
+      {showCancelModal && cancelPkg && (
+        <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.75)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2000,padding:16}}>
+          <div style={{background:"#161B22",borderRadius:16,padding:24,width:"100%",maxWidth:420,border:"1px solid #30363D"}}>
+            <div style={{fontWeight:700,fontSize:18,marginBottom:4}}>❌ Cancelar envío</div>
+            <div style={{color:"#9CA3AF",fontSize:13,marginBottom:20}}>{cancelPkg.id} — {cancelPkg.cliente}</div>
+            <div style={{marginBottom:12}}>
+              <div style={{color:"#6B7280",fontSize:12,marginBottom:10,letterSpacing:1}}>MOTIVO</div>
+              {[["cliente","Cancelado por el cliente"],["admin","Cancelado por administrador"],["otra","Otra causa..."]].map(([val,lbl])=>(
+                <label key={val} style={{display:"flex",alignItems:"center",gap:12,padding:"12px",borderRadius:8,background:cancelMotivo===val?"#21262D":"transparent",cursor:"pointer",marginBottom:6,border:"1px solid "+(cancelMotivo===val?"#30363D":"transparent")}}>
+                  <input type="radio" name="motivo" value={val} checked={cancelMotivo===val} onChange={()=>setCancelMotivo(val)} style={{accentColor:"#EF4444",width:18,height:18}}/>
+                  <span style={{color:"#F3F4F6",fontSize:15}}>{lbl}</span>
+                </label>
+              ))}
+              {cancelMotivo==="otra" && (
+                <input style={{...S.input,marginTop:8,fontSize:14}} placeholder="Describe el motivo..." value={cancelOtra} onChange={e=>setCancelOtra(e.target.value)}/>
+              )}
+            </div>
+            <div style={{display:"flex",gap:10,marginTop:20}}>
+              <button style={{...S.btnSecondary,flex:1,justifyContent:"center",padding:"12px"}} onClick={()=>{setShowCancelModal(false);setCancelPkg(null);}}>Volver</button>
+              <button style={{...S.btnPrimary,flex:1,justifyContent:"center",padding:"12px",background:"#EF4444",borderColor:"#EF4444"}} onClick={cancelarPaquete} disabled={saving||(cancelMotivo==="otra"&&!cancelOtra)}>{saving?"Cancelando...":"Confirmar"}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
